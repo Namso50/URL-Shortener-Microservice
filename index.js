@@ -1,31 +1,33 @@
-require('dotenv').config();
+require('dotenv').config(); // process.env is used to access the .env file variables
 const express = require('express');
-const cors = require('cors');
 const app = express();
 const bodyParser = require('body-parser')
 const dns = require('dns')
+const mongoose = require('mongoose')
+const Url = require('./Url')
+const add_find = require('./add_find')
+
+// mongoose 
+mongoose.connect(process.env.MONGO_URI)
 
 // Basic Configuration
-const port = process.env.PORT || 3000;
-
-app.use(cors());
+const port = process.env.PORT || 3000; 
 
 app.use(bodyParser.urlencoded({ extended: false }));
 
 app.use('/public', express.static(`${process.cwd()}/public`));
 
-app.get('/', function (req, res) {
+app.get('/', function(req, res) {
   // The process.cwd() method returns the current working directory of the Node.js process.
   res.sendFile(process.cwd() + '/views/index.html');
 });
 
 // Your first API endpoint
-app.get('/api/hello', function (req, res) {
+app.get('/api/hello', function(req, res) {
   res.json({ greeting: 'hello API' });
 });
 
 // url shortener
-const urls = []
 
 app.post("/api/shorturl", (req, res) => {
 
@@ -34,6 +36,7 @@ app.post("/api/shorturl", (req, res) => {
   // invalid url
   if (!urlRegex.test(req.body.url)) {
     res.json({ error: 'invalid url' })
+    return
   }
 
   let newUrl = req.body.url.replace(/^https?:\/\//, "")
@@ -45,13 +48,7 @@ app.post("/api/shorturl", (req, res) => {
       console.log(err)
       res.json({ error: 'invalid hostname' })
     } else {
-      if (!urls.includes(req.body.url)) {
-        urls.push(req.body.url)
-      }
-      res.json({
-        original_url: req.body.url,
-        short_url: urls.indexOf(req.body.url)
-      })
+      add_find(req, res)
     }
   })
 
@@ -59,10 +56,14 @@ app.post("/api/shorturl", (req, res) => {
 
 // go to the site 'shorturl' specified  
 app.get("/api/shorturl/:num", (req, res) => {
-  res.redirect(urls[req.params.num])
+  goUrl()
+  async function goUrl() { 
+     let url = await Url.find({ short_url: req.params.num})
+   res.redirect(url[0].original_url)
+  }
 })
 
 
-app.listen(port, function () {
+app.listen(port, function() {
   console.log(`Listening on port ${port}`);
 });
