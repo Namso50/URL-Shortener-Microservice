@@ -1,19 +1,17 @@
 require('dotenv').config(); // process.env is used to access the .env file variables
 const express = require('express');
 const app = express();
-const bodyParser = require('body-parser')
 const dns = require('dns')
 const mongoose = require('mongoose')
 const Url = require('./Url')
-const add_find = require('./add_find')
 
 // mongoose 
 mongoose.connect(process.env.MONGO_URI)
 
 // Basic Configuration
-const port = process.env.PORT || 3000; 
+const port = process.env.PORT || 3000;
 
-app.use(bodyParser.urlencoded({ extended: false }));
+app.use(express.urlencoded({ extended: true }));
 
 app.use('/public', express.static(`${process.cwd()}/public`));
 
@@ -42,25 +40,31 @@ app.post("/api/shorturl", (req, res) => {
   let newUrl = req.body.url.replace(/^https?:\/\//, "")
     .replace(/\/.*/, "")
 
-  dns.lookup(newUrl, (err, address, family) => {
+  dns.lookup(newUrl, async (err, address, family) => {
     // invalid hostname
     if (err) {
       console.log(err)
       res.json({ error: 'invalid hostname' })
     } else {
-      add_find(req, res)
+      let findedUrl = await Url.find({ original_url: req.body.url })
+      if (findedUrl.length == 0) {
+        let urls = await Url.find() // find all values
+        // if there is no value, short_url became 1 firstly
+        await Url.create({
+          original_url: req.body.url,
+          short_url: urls[urls.length - 1] ? urls[urls.length - 1].short_url + 1 : 1,
+        })
+      }
+
+      res.json((await Url.find({ original_url: req.body.url }, { _id: 0, __v: 0 }))[0])
     }
   })
-
 })
 
 // go to the site 'shorturl' specified  
-app.get("/api/shorturl/:num", (req, res) => {
-  goUrl()
-  async function goUrl() { 
-     let url = await Url.find({ short_url: req.params.num})
-   res.redirect(url[0].original_url)
-  }
+app.get("/api/shorturl/:num", async (req, res) => {
+  let url = await Url.find({ short_url: req.params.num })
+  res.redirect(url[0].original_url)
 })
 
 
